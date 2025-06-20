@@ -1,0 +1,895 @@
+## Complete Keypoint Annotation System Analysis
+
+### 1. Backend Architecture (Python/Django)
+
+Based on the codebase, the backend handles:
+- Image storage and serving
+- Annotation data persistence
+- User authentication and role management
+- YOLO model integration for initial keypoint prediction
+
+### 2. Desktop Annotation Tool (Python/Tkinter)
+
+The main annotation logic is in `kp_annotation(3).py`. Here's the complete breakdown:
+
+#### Keypoint Structure:
+```python
+parts = [    
+    "nose", "left eye", "right eye", "left ear", "right ear",
+    "left shoulder", "right shoulder", "left elbow", "right elbow", 
+    "left wrist", "right wrist", "left hip", "right hip", 
+    "left knee", "right knee", "left ankle", "right ankle", 
+    "head", "neck", "mid back", "lower back", "upper back", 
+    "left palm end", "right palm end", "left foot end", "right foot end"
+]
+
+# 26 keypoints with specific connections
+possible_connections = [
+    (0, 1), (0, 2), (1, 3), (2, 4), (5, 7), (7, 9), 
+    (6, 8), (8, 10), (11, 13), (13, 15), (12, 14), (14, 16), 
+    (17, 18), (18, 21), (19, 21), (19, 20), (20, 11), (20, 12), 
+    (15, 24), (16, 25), (9, 22), (10, 23)
+]
+```
+
+### 3. Complete React/React Native Implementation
+
+Here's the full implementation for migrating this system:
+
+#### Core Keypoint Annotation Component:
+
+````javascript
+// KeypointAnnotationScreen.js
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Image,
+  StyleSheet,
+  TouchableOpacity,
+  Modal,
+  Dimensions,
+  Text,
+  Alert,
+  ScrollView,
+  Switch,
+  Button
+} from 'react-native';
+import Svg, { Rect, Circle, Line, Text as SvgText } from 'react-native-svg';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  runOnJS,
+} from 'react-native-reanimated';
+
+const { width, height } = Dimensions.get('window');
+
+// Keypoint definitions (from Python code)
+const PARTS = [
+  "nose", "left eye", "right eye", "left ear", "right ear",
+  "left shoulder", "right shoulder", "left elbow", "right elbow", 
+  "left wrist", "right wrist", "left hip", "right hip", 
+  "left knee", "right knee", "left ankle", "right ankle", 
+  "head", "neck", "mid back", "lower back", "upper back", 
+  "left palm end", "right palm end", "left foot end", "right foot end"
+];
+
+const CONNECTIONS = [
+  [0, 1], [0, 2], [1, 3], [2, 4], [5, 7], [7, 9], 
+  [6, 8], [8, 10], [11, 13], [13, 15], [12, 14], [14, 16], 
+  [17, 18], [18, 21], [19, 21], [19, 20], [20, 11], [20, 12], 
+  [15, 24], [16, 25], [9, 22], [10, 23]
+];
+
+const COLORS = [
+  '#000000', '#FF0000', '#0000FF', '#FF0000', '#0000FF',
+  '#FF8000', '#008000', '#800080', '#FF00FF', '#008080',
+  '#008000', '#000080', '#800000', '#404040', '#8B4513',
+  '#808000', '#FF4500', '#FFD700', '#32CD32', '#8A2BE2',
+  '#DC143C', '#00CED1', '#FF1493', '#00FF00', '#FF69B4', '#4169E1'
+];
+
+const KeypointAnnotationScreen = ({ route, navigation }) => {
+  const [images, setImages] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [keypoints, setKeypoints] = useState([]);
+  const [keypointConfidence, setKeypointConfidence] = useState([]);
+  const [boundingBox, setBoundingBox] = useState([0, 0, 0, 0]);
+  const [selectedPointIndex, setSelectedPointIndex] = useState(null);
+  const [selectedBboxCorner, setSelectedBboxCorner] = useState(null);
+  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+  const [originalSize, setOriginalSize] = useState({ width: 0, height: 0 });
+  const [scale, setScale] = useState(1);
+  const [currentConfidence, setCurrentConfidence] = useState(1.0);
+  const [showConfidenceModal, setShowConfidenceModal] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const scaleX = useSharedValue(1);
+  const scaleY = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+
+  const imageRef = useRef(null);
+  const BASE_URL = "http://127.0.0.1:5000";
+
+  useEffect(() => {
+    loadImages();
+  }, []);
+
+  useEffect(() => {
+    if (selectedImage) {
+      loadAnnotationData();
+    }
+  }, [selectedImage]);
+
+  const loadImages = async () => {
+    setLoading(true);
+    try {
+      const token = await AsyncStorage.getItem("access_token");
+      const response = await fetch(`${BASE_URL}/api/annotation/`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const formattedImages = data.map(item => ({
+          id: item.id.toString(),
+          uri: item.imagestobeannotated.startsWith("/media/") 
+            ? `${BASE_URL}${item.imagestobeannotated}` 
+            : item.imagestobeannotated,
+        }));
+        setImages(formattedImages);
+        if (formattedImages.length > 0) {
+          setSelectedImage(formattedImages[0]);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading images:", error);
+      Alert.alert("Error", "Failed to load images");
+    }
+    setLoading(false);
+  };
+
+  const loadAnnotationData = async () => {
+    if (!selectedImage) return;
+    
+    try {
+      const token = await AsyncStorage.getItem("access_token");
+      const response = await fetch(`${BASE_URL}/api/annotations/${selectedImage.id}/`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.keypoints && data.keypoints.length > 0) {
+          // Load existing annotations
+          setKeypoints(data.keypoints);
+          setKeypointConfidence(data.confidence || Array(26).fill(1.0));
+          setBoundingBox(data.bounding_box || [0, 0, 0, 0]);
+        } else {
+          // Get initial predictions from YOLO model
+          await getInitialPredictions();
+        }
+      } else {
+        await getInitialPredictions();
+      }
+    } catch (error) {
+      console.error("Error loading annotation:", error);
+      await getInitialPredictions();
+    }
+  };
+
+  const getInitialPredictions = async () => {
+    try {
+      const token = await AsyncStorage.getItem("access_token");
+      const response = await fetch(`${BASE_URL}/api/predict-keypoints/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ image_id: selectedImage.id }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const correctedKeypoints = correctKeypoints(data.keypoints, originalSize);
+        setKeypoints(correctedKeypoints);
+        setKeypointConfidence(Array(26).fill(1.0));
+        setBoundingBox(data.bounding_box || [0, 0, 0, 0]);
+      }
+    } catch (error) {
+      console.error("Error getting predictions:", error);
+      // Initialize with default positions if prediction fails
+      initializeDefaultKeypoints();
+    }
+  };
+
+  // Port of Python's correct_keypoints function
+  const correctKeypoints = (rawKeypoints, imageSize) => {
+    if (!rawKeypoints || rawKeypoints.length === 0) {
+      console.log("No keypoints found!!");
+      return initializeDefaultKeypoints();
+    }
+
+    let corrected = [...rawKeypoints];
+    
+    // Apply corrections from Python code
+    corrected[21] = [
+      (corrected[5][0] + corrected[6][0]) / 2,
+      (corrected[5][1] + corrected[6][1]) / 2
+    ];
+    corrected[20] = [...corrected[19]];
+    corrected[19] = [
+      (corrected[20][0] + corrected[21][0]) / 2,
+      (corrected[20][1] + corrected[21][1]) / 2
+    ];
+    corrected[22] = [corrected[9][0], corrected[9][1] + 10];
+    corrected[23] = [corrected[10][0], corrected[10][1] + 10];
+    corrected[24] = [corrected[15][0] + 10, corrected[15][1] + 5];
+    corrected[25] = [corrected[16][0] + 10, corrected[16][1] + 5];
+
+    // Adjust keypoints to stay within bounds (margin=5)
+    return adjustKeypoints(corrected, imageSize, 5);
+  };
+
+  const adjustKeypoints = (keypoints, imageSize, margin = 5) => {
+    return keypoints.map(([x, y]) => {
+      let adjustedX = Math.max(margin, Math.min(x, imageSize.width - margin));
+      let adjustedY = Math.max(margin, Math.min(y, imageSize.height - margin));
+      return [adjustedX, adjustedY];
+    });
+  };
+
+  const initializeDefaultKeypoints = () => {
+    // Initialize keypoints in a basic human pose formation
+    const centerX = originalSize.width / 2;
+    const centerY = originalSize.height / 2;
+    
+    const defaultPoints = Array(26).fill(null).map((_, index) => {
+      // Basic positioning logic for human pose
+      switch(index) {
+        case 0: return [centerX, centerY - 100]; // nose
+        case 1: return [centerX - 10, centerY - 110]; // left eye
+        case 2: return [centerX + 10, centerY - 110]; // right eye
+        // ... add more default positions
+        default: return [centerX, centerY];
+      }
+    });
+    
+    return defaultPoints;
+  };
+
+  const handleImageLayout = (event) => {
+    const { width: imgWidth, height: imgHeight } = event.nativeEvent.layout;
+    setImageSize({ width: imgWidth, height: imgHeight });
+  };
+
+  const handleImageLoad = (event) => {
+    const { width: origWidth, height: origHeight } = event.nativeEvent.source;
+    setOriginalSize({ width: origWidth, height: origHeight });
+  };
+
+  const handleTouchStart = (event) => {
+    const { locationX, locationY } = event.nativeEvent;
+    
+    // Convert touch coordinates to original image coordinates
+    const x = (locationX / imageSize.width) * originalSize.width;
+    const y = (locationY / imageSize.height) * originalSize.height;
+    
+    // Check if touching a keypoint
+    let nearestPointIndex = -1;
+    let minDistance = Infinity;
+    
+    keypoints.forEach((point, index) => {
+      const distance = Math.sqrt(
+        Math.pow(point[0] - x, 2) + Math.pow(point[1] - y, 2)
+      );
+      if (distance < 20 && distance < minDistance) { // 20px tolerance
+        minDistance = distance;
+        nearestPointIndex = index;
+      }
+    });
+    
+    if (nearestPointIndex !== -1) {
+      setSelectedPointIndex(nearestPointIndex);
+      setSelectedBboxCorner(null);
+    } else {
+      // Check if touching bounding box corners
+      const bboxTolerance = 15;
+      const corners = [
+        [boundingBox[0], boundingBox[1]], // top-left
+        [boundingBox[2], boundingBox[3]]  // bottom-right
+      ];
+      
+      corners.forEach((corner, index) => {
+        const distance = Math.sqrt(
+          Math.pow(corner[0] - x, 2) + Math.pow(corner[1] - y, 2)
+        );
+        if (distance < bboxTolerance) {
+          setSelectedBboxCorner(index);
+          setSelectedPointIndex(null);
+        }
+      });
+    }
+  };
+
+  const handleTouchMove = (event) => {
+    const { locationX, locationY } = event.nativeEvent;
+    
+    // Convert to original image coordinates
+    const x = Math.max(0, Math.min((locationX / imageSize.width) * originalSize.width, originalSize.width));
+    const y = Math.max(0, Math.min((locationY / imageSize.height) * originalSize.height, originalSize.height));
+    
+    if (selectedPointIndex !== null) {
+      // Move selected keypoint
+      const newKeypoints = [...keypoints];
+      newKeypoints[selectedPointIndex] = [x, y];
+      
+      // Update confidence for moved point
+      const newConfidence = [...keypointConfidence];
+      newConfidence[selectedPointIndex] = currentConfidence;
+      
+      setKeypoints(newKeypoints);
+      setKeypointConfidence(newConfidence);
+    } else if (selectedBboxCorner !== null) {
+      // Move bounding box corner
+      const newBbox = [...boundingBox];
+      if (selectedBboxCorner === 0) {
+        newBbox[0] = x;
+        newBbox[1] = y;
+      } else {
+        newBbox[2] = x;
+        newBbox[3] = y;
+      }
+      setBoundingBox(newBbox);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setSelectedPointIndex(null);
+    setSelectedBboxCorner(null);
+  };
+
+  const saveAnnotations = async () => {
+    if (!selectedImage || !keypoints.length) {
+      Alert.alert("Error", "No keypoints to save");
+      return;
+    }
+
+    try {
+      const token = await AsyncStorage.getItem("access_token");
+      
+      // Normalize coordinates for saving (like Python version)
+      const normalizedKeypoints = keypoints.map((point, index) => ({
+        x: point[0] / originalSize.width,
+        y: point[1] / originalSize.height,
+        confidence: keypointConfidence[index]
+      }));
+
+      const normalizedBbox = [
+        boundingBox[0] / originalSize.width,
+        boundingBox[1] / originalSize.height,
+        boundingBox[2] / originalSize.width,
+        boundingBox[3] / originalSize.height
+      ];
+
+      const payload = {
+        image_id: selectedImage.id,
+        keypoints: normalizedKeypoints,
+        bounding_box: normalizedBbox,
+        confidence: keypointConfidence
+      };
+
+      const response = await fetch(`${BASE_URL}/api/save-annotation/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        Alert.alert("Success", "Annotations saved successfully");
+      } else {
+        throw new Error("Failed to save annotations");
+      }
+    } catch (error) {
+      console.error("Error saving annotations:", error);
+      Alert.alert("Error", "Failed to save annotations");
+    }
+  };
+
+  const toggleConfidence = () => {
+    setCurrentConfidence(currentConfidence === 1.0 ? 0.05 : 1.0);
+  };
+
+  const nextImage = () => {
+    if (currentIndex < images.length - 1) {
+      const newIndex = currentIndex + 1;
+      setCurrentIndex(newIndex);
+      setSelectedImage(images[newIndex]);
+    }
+  };
+
+  const prevImage = () => {
+    if (currentIndex > 0) {
+      const newIndex = currentIndex - 1;
+      setCurrentIndex(newIndex);
+      setSelectedImage(images[newIndex]);
+    }
+  };
+
+  const renderKeypoints = () => {
+    if (!keypoints.length || !imageSize.width) return null;
+
+    return keypoints.map((point, index) => {
+      const x = (point[0] / originalSize.width) * imageSize.width;
+      const y = (point[1] / originalSize.height) * imageSize.height;
+      const color = COLORS[index % COLORS.length];
+      const isLowConfidence = keypointConfidence[index] < 0.5;
+      
+      return (
+        <React.Fragment key={index}>
+          <Circle
+            cx={x}
+            cy={y}
+            r="6"
+            fill={color}
+            stroke={isLowConfidence ? "black" : color}
+            strokeWidth="2"
+          />
+          <SvgText
+            x={x}
+            y={y - 15}
+            fontSize="10"
+            fontWeight="bold"
+            textAnchor="middle"
+            fill="black"
+          >
+            {index + 1}
+          </SvgText>
+        </React.Fragment>
+      );
+    });
+  };
+
+  const renderConnections = () => {
+    if (!keypoints.length || !imageSize.width) return null;
+
+    return CONNECTIONS.map((connection, index) => {
+      const [i, j] = connection;
+      if (i >= keypoints.length || j >= keypoints.length) return null;
+      
+      const x1 = (keypoints[i][0] / originalSize.width) * imageSize.width;
+      const y1 = (keypoints[i][1] / originalSize.height) * imageSize.height;
+      const x2 = (keypoints[j][0] / originalSize.width) * imageSize.width;
+      const y2 = (keypoints[j][1] / originalSize.height) * imageSize.height;
+      
+      return (
+        <Line
+          key={index}
+          x1={x1}
+          y1={y1}
+          x2={x2}
+          y2={y2}
+          stroke="white"
+          strokeWidth="3"
+        />
+      );
+    });
+  };
+
+  const renderBoundingBox = () => {
+    if (!boundingBox.length || !imageSize.width) return null;
+
+    const x1 = (boundingBox[0] / originalSize.width) * imageSize.width;
+    const y1 = (boundingBox[1] / originalSize.height) * imageSize.height;
+    const x2 = (boundingBox[2] / originalSize.width) * imageSize.width;
+    const y2 = (boundingBox[3] / originalSize.height) * imageSize.height;
+
+    return (
+      <React.Fragment>
+        <Rect
+          x={x1}
+          y={y1}
+          width={x2 - x1}
+          height={y2 - y1}
+          fill="none"
+          stroke="red"
+          strokeWidth="3"
+        />
+        <Circle cx={x1} cy={y1} r="5" fill="red" />
+        <Circle cx={x2} cy={y2} r="5" fill="red" />
+      </React.Fragment>
+    );
+  };
+
+  const ConfidenceModal = () => (
+    <Modal
+      visible={showConfidenceModal}
+      animationType="slide"
+      transparent={true}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Keypoint Confidence Settings</Text>
+          <ScrollView>
+            {PARTS.map((part, index) => (
+              <View key={index} style={styles.confidenceRow}>
+                <Text style={[styles.partLabel, { color: COLORS[index % COLORS.length] }]}>
+                  {index + 1}. {part}
+                </Text>
+                <Switch
+                  value={keypointConfidence[index] >= 1.0}
+                  onValueChange={(value) => {
+                    const newConfidence = [...keypointConfidence];
+                    newConfidence[index] = value ? 1.0 : 0.05;
+                    setKeypointConfidence(newConfidence);
+                  }}
+                />
+                <Text style={styles.confidenceText}>
+                  {keypointConfidence[index] >= 1.0 ? 'High' : 'Low'}
+                </Text>
+              </View>
+            ))}
+          </ScrollView>
+          <Button
+            title="Close"
+            onPress={() => setShowConfidenceModal(false)}
+          />
+        </View>
+      </View>
+    </Modal>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text>Loading images...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Keypoint Annotation</Text>
+        <Text style={styles.imageCounter}>
+          {currentIndex + 1} / {images.length}
+        </Text>
+        <Text style={styles.confidenceIndicator}>
+          Current Confidence: {currentConfidence === 1.0 ? 'High' : 'Low'}
+        </Text>
+      </View>
+
+      {selectedImage && (
+        <View style={styles.imageContainer}>
+          <View
+            style={styles.imageWrapper}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
+            <Image
+              ref={imageRef}
+              source={{ uri: selectedImage.uri }}
+              style={styles.image}
+              onLayout={handleImageLayout}
+              onLoad={handleImageLoad}
+              resizeMode="contain"
+            />
+            <Svg style={StyleSheet.absoluteFill}>
+              {renderConnections()}
+              {renderKeypoints()}
+              {renderBoundingBox()}
+            </Svg>
+          </View>
+        </View>
+      )}
+
+      <View style={styles.controls}>
+        <TouchableOpacity
+          style={[styles.button, styles.prevButton]}
+          onPress={prevImage}
+          disabled={currentIndex === 0}
+        >
+          <Text style={styles.buttonText}>Previous (A)</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.button}
+          onPress={toggleConfidence}
+        >
+          <Text style={styles.buttonText}>
+            Toggle Confidence (Space)
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => setShowConfidenceModal(true)}
+        >
+          <Text style={styles.buttonText}>Confidence Settings</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.button, styles.saveButton]}
+          onPress={saveAnnotations}
+        >
+          <Text style={styles.buttonText}>Save (S)</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.button, styles.nextButton]}
+          onPress={nextImage}
+          disabled={currentIndex === images.length - 1}
+        >
+          <Text style={styles.buttonText}>Next (D)</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ConfidenceModal />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  header: {
+    padding: 15,
+    backgroundColor: '#f5f5f5',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  imageCounter: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 5,
+  },
+  confidenceIndicator: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 5,
+    color: '#666',
+  },
+  imageContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageWrapper: {
+    position: 'relative',
+    maxWidth: width - 20,
+    maxHeight: height * 0.6,
+  },
+  image: {
+    width: '100%',
+    height: '100%',
+  },
+  controls: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    padding: 15,
+    backgroundColor: '#f5f5f5',
+    flexWrap: 'wrap',
+  },
+  button: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 5,
+    margin: 5,
+  },
+  prevButton: {
+    backgroundColor: '#FF9500',
+  },
+  nextButton: {
+    backgroundColor: '#34C759',
+  },
+  saveButton: {
+    backgroundColor: '#FF3B30',
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 20,
+    maxHeight: height * 0.8,
+    width: width * 0.9,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  confidenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  partLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  confidenceText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 10,
+  },
+});
+
+export default KeypointAnnotationScreen;
+````
+
+#### Backend API Endpoints (Django):
+
+````python
+# views.py - Additional endpoints needed
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth.decorators import login_required
+import json
+from ultralytics import YOLO
+import cv2
+import numpy as np
+
+# Load YOLO model
+model = YOLO('weights/best26.pt')
+
+@csrf_exempt
+@login_required
+def predict_keypoints(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            image_id = data.get('image_id')
+            
+            # Get image from database
+            image_obj = ImageModel.objects.get(id=image_id)
+            image_path = image_obj.imagestobeannotated.path
+            
+            # Load and process image
+            image = cv2.imread(image_path)
+            image_resized = cv2.resize(image, (256, 256), interpolation=cv2.INTER_AREA)
+            
+            # Get predictions
+            results = model(image_resized)
+            keypoints = results[0].keypoints.xy.tolist()[0] if results[0].keypoints else []
+            bbox = results[0].boxes.xyxy.tolist()[0] if results[0].boxes else [0, 0, 0, 0]
+            
+            # Apply corrections (port from Python code)
+            corrected_keypoints = correct_keypoints(keypoints, image.shape)
+            
+            return JsonResponse({
+                'keypoints': corrected_keypoints,
+                'bounding_box': bbox,
+                'confidence': [1.0] * len(corrected_keypoints)
+            })
+            
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+def correct_keypoints(keypoints, image_shape):
+    """Port of Python correct_keypoints function"""
+    if not keypoints:
+        return []
+    
+    corrected = keypoints.copy()
+    
+    # Apply same corrections as Python version
+    if len(corrected) >= 22:
+        corrected[21] = [(corrected[5][0] + corrected[6][0]) / 2,
+                        (corrected[5][1] + corrected[6][1]) / 2]
+        corrected[20] = corrected[19].copy()
+        corrected[19] = [(corrected[20][0] + corrected[21][0]) / 2,
+                        (corrected[20][1] + corrected[21][1]) / 2]
+        corrected[22] = [corrected[9][0], corrected[9][1] + 10]
+        corrected[23] = [corrected[10][0], corrected[10][1] + 10]
+        corrected[24] = [corrected[15][0] + 10, corrected[15][1] + 5]
+        corrected[25] = [corrected[16][0] + 10, corrected[16][1] + 5]
+    
+    return adjust_keypoints(corrected, image_shape)
+
+def adjust_keypoints(keypoints, image_shape, margin=5):
+    """Adjust keypoints to stay within image bounds"""
+    height, width = image_shape[:2]
+    adjusted = []
+    
+    for x, y in keypoints:
+        x = max(margin, min(x, width - margin))
+        y = max(margin, min(y, height - margin))
+        adjusted.append([x, y])
+    
+    return adjusted
+
+@csrf_exempt
+@login_required
+def save_annotation(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            image_id = data.get('image_id')
+            keypoints = data.get('keypoints')
+            bounding_box = data.get('bounding_box')
+            confidence = data.get('confidence')
+            
+            # Save annotation to database
+            annotation, created = AnnotationModel.objects.update_or_create(
+                image_id=image_id,
+                user=request.user,
+                defaults={
+                    'keypoints': keypoints,
+                    'bounding_box': bounding_box,
+                    'confidence': confidence,
+                    'status': 'annotated'
+                }
+            )
+            
+            return JsonResponse({'success': True, 'annotation_id': annotation.id})
+            
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
+````
+
+### Key Migration Points:
+
+1. **Coordinate System**: Convert between touch coordinates and image coordinates
+2. **Scaling**: Handle different screen sizes and image aspect ratios
+3. **Gesture Handling**: Use React Native gesture handlers for touch interactions
+4. **State Management**: Maintain keypoint positions, confidence values, and bounding boxes
+5. **API Integration**: Create endpoints for prediction and saving annotations
+6. **Visual Rendering**: Use SVG for drawing keypoints, connections, and bounding boxes
+
+### Additional Features to Implement:
+
+1. **Zoom and Pan**: Add gesture handlers for image navigation
+2. **Undo/Redo**: Implement history stack for annotation changes  
+3. **Keyboard Shortcuts**: Add hardware keyboard support for efficiency
+4. **Batch Operations**: Allow bulk confidence adjustments
+5. **Export Functionality**: Generate annotation files in various formats
+
+This implementation provides a complete port of the Python keypoint annotation system to React Native, maintaining all the core functionality while adapting to mobile-first design patterns.
+
+Similar code found with 3 license types

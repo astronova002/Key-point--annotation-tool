@@ -1,0 +1,287 @@
+# Keypoint Annotation Tool - Project Documentation
+
+## Overview
+The Keypoint Annotation Tool is a specialized web-based application designed for creating high-quality annotated datasets for infant pose detection. The system is specifically built to address the lack of proper infant pose models by enabling medical professionals and annotators to create precise keypoint annotations on infant images for training custom YOLO models and developing cerebral palsy detection systems.
+
+## Project Purpose & Goals
+
+### Primary Objectives
+1. **Create Infant Pose Dataset**: Build a comprehensive, medically-validated dataset of infant keypoint annotations
+2. **Custom Model Training**: Generate training data for infant-specific pose detection models
+3. **Medical Research Support**: Provide infrastructure for cerebral palsy research and early detection studies
+4. **Quality Assurance**: Ensure clinical-grade accuracy through multi-stage verification processes
+
+### Key Challenges Addressed
+- Existing YOLO models are trained on adult poses, not suitable for infants
+- Need for precise keypoint detection for medical applications
+- Requirement for scalable annotation workflow with quality control
+- Integration of AI assistance with human expertise
+
+## System Architecture
+
+### Frontend (React + TypeScript)
+- Built with React 18 and TypeScript
+- Uses Vite as the build tool
+- Implements Material-UI for UI components
+- Uses Tailwind CSS for styling
+- Implements React Router for navigation
+- **New**: Interactive keypoint annotation interface with zoom/pan capabilities
+- **New**: AI suggestion overlay system for YOLO-assisted annotations
+- **New**: Real-time progress tracking and performance analytics
+
+### Backend (Django + DRF)
+- Built with Django 5.2
+- Uses Django REST Framework for API endpoints
+- Implements JWT authentication with refresh tokens
+- Custom user model with role-based access control
+- **New**: Celery integration for background YOLO processing
+- **New**: Modular ML model support architecture
+- **New**: Comprehensive audit logging system
+- **New**: Performance metrics calculation engine
+
+### Database Architecture
+- **Updated**: Comprehensive schema designed for medical annotation workflows
+- **New**: Configurable keypoint schema support
+- **New**: Batch-based image management system
+- **New**: Multi-stage verification workflow
+- **New**: Performance analytics and quality metrics
+
+## User Roles and Permissions
+
+### Admin (Super User)
+- Upload bulk images to the system
+- Create and manage image batches
+- Assign batches to annotators
+- Configure keypoint schemas for different models
+- Monitor system performance and user analytics
+- Manage user accounts and approvals
+- Generate dataset exports and reports
+- Configure ML model parameters
+
+### Annotator
+- Receive assigned image batches (typically 50-200 images)
+- Refine YOLO-generated keypoints for anatomical accuracy
+- Use annotation tools with zoom, pan, and AI suggestions
+- Submit completed annotations with confidence scores
+- Track personal performance metrics
+- Add notes for difficult cases
+
+### Verifier (Medical Expert/Quality Controller)
+- Review submitted annotations for accuracy
+- Approve high-quality annotations
+- Make minor corrections when needed
+- Reject poor quality images or annotations
+- Provide feedback to annotators
+- Ensure clinical-standard accuracy
+- Track verification metrics
+
+## Workflow Process
+
+### 1. Image Upload & Processing
+```
+Admin uploads batch → Images stored → YOLO processing queued → 
+Initial keypoints generated → Batch ready for assignment
+```
+
+### 2. Annotation Workflow
+```
+Batch assigned to annotator → Annotator refines keypoints → 
+Annotation submitted → Queued for verification
+```
+
+### 3. Verification Process
+```
+Verifier reviews annotation → Decision made:
+├── Approved → Added to final dataset
+├── Approved with corrections → Corrections applied → Final dataset
+└── Rejected → Feedback provided → May be reassigned
+```
+
+### 4. Dataset Compilation
+```
+All approved annotations → Quality metrics calculated → 
+Dataset export generated → Research-ready dataset
+```
+
+## Technical Features
+
+### YOLO Integration
+- Automated initial pose detection on uploaded images
+- Background processing using Celery task queue
+- Multiple model version support
+- Confidence scoring and quality filtering
+
+### Annotation Interface
+- Interactive keypoint editor with drag-and-drop
+- Zoom and pan functionality for detailed work
+- AI suggestion overlay (optional)
+- Keypoint visibility toggles
+- Confidence scoring per keypoint
+- Progress tracking within batches
+
+### Quality Control
+- Multi-stage verification process
+- Inter-annotator agreement metrics
+- Automatic quality scoring
+- Rejection reason categorization
+- Feedback loop for continuous improvement
+
+### Analytics & Reporting
+- Real-time progress dashboards
+- Annotator performance metrics
+- Dataset quality analysis
+- Time tracking and efficiency reports
+- Export capabilities for research
+
+## Database Schema Overview
+
+### Core Entities
+1. **User**: Enhanced with role-specific attributes and performance tracking
+2. **KeypointSchema**: Configurable schema definitions for different models
+3. **ImageBatch**: Organized batch management with YOLO processing status
+4. **Image**: Individual image with metadata and processing results
+5. **BatchAssignment**: Batch-level task assignment to annotators
+6. **Annotation**: Refined keypoint data with quality metrics
+7. **Verification**: Medical expert review and approval process
+8. **MLModelConfig**: Modular ML model configuration
+9. **AuditLog**: Comprehensive activity tracking
+10. **PerformanceMetrics**: User and system performance analytics
+
+### Key Relationships
+- Batch-based assignment system for organized workflow
+- One-to-one annotation per image assignment
+- Single verification per annotation with correction support
+- Comprehensive audit trail for all actions
+
+## API Endpoints
+
+### Enhanced Authentication
+- POST /api/auth/register/ - User registration with role selection
+- POST /api/auth/login/ - JWT-based login with role-based redirection
+- POST /api/auth/logout/ - Secure logout
+- POST /api/auth/token/refresh/ - Token refresh
+- GET /api/auth/status/ - Current user status and permissions
+
+### Image & Batch Management
+- POST /api/batches/ - Create new image batch
+- GET /api/batches/ - List batches with filtering
+- POST /api/batches/{id}/upload/ - Upload images to batch
+- GET /api/batches/{id}/status/ - Batch processing status
+- POST /api/batches/{id}/assign/ - Assign batch to annotator
+
+### Annotation Workflow
+- GET /api/assignments/ - Get assigned batches/images
+- GET /api/images/{id}/ - Get image with YOLO keypoints
+- POST /api/annotations/ - Submit annotation
+- PUT /api/annotations/{id}/ - Update annotation
+- GET /api/annotations/{id}/history/ - Annotation revision history
+
+### Verification Process
+- GET /api/verifications/queue/ - Pending verification queue
+- POST /api/verifications/ - Submit verification decision
+- GET /api/verifications/stats/ - Verification statistics
+
+### Analytics & Reporting
+- GET /api/analytics/performance/ - User performance metrics
+- GET /api/analytics/dataset/ - Dataset quality metrics
+- POST /api/exports/ - Generate dataset export
+- GET /api/reports/activity/ - Activity reports
+
+## Security & Compliance
+
+### Data Protection
+- Secure image storage with access controls
+- Patient data anonymization support
+- GDPR/HIPAA compliance considerations
+- Audit trail for all data access
+
+### Authentication & Authorization
+- JWT-based authentication with refresh tokens
+- Role-based access control (RBAC)
+- Session management and timeout
+- API rate limiting
+
+## Performance Considerations
+
+### Scalability
+- Batch processing for large datasets
+- Background task processing with Celery
+- Database indexing for query optimization
+- Configurable batch sizes per annotator capacity
+
+### Optimization
+- Image thumbnail generation for fast loading
+- Progressive loading of annotation interfaces
+- Caching strategies for frequently accessed data
+- Efficient keypoint storage using JSON fields
+
+## Deployment Architecture
+
+### Development Environment
+- Docker containerization support
+- Local development with hot reloading
+- Separate databases for development/testing
+- Mock YOLO processing for development
+
+### Production Environment
+- Scalable cloud deployment (AWS/GCP/Azure)
+- Load balancing for high availability
+- Secure file storage (S3 compatible)
+- Production YOLO model deployment
+- Monitoring and logging infrastructure
+
+## Future Enhancements
+
+### Planned Features
+1. **Advanced Analytics**: Machine learning insights on annotation quality
+2. **Collaborative Annotation**: Multiple annotators per image support
+3. **Active Learning**: Smart image selection for annotation priority
+4. **Mobile Support**: Tablet-optimized annotation interface
+5. **Integration APIs**: Connection with hospital information systems
+
+### Technical Improvements
+1. **Real-time Collaboration**: WebSocket support for live annotation sessions
+2. **Advanced ML Pipeline**: Multiple model comparison and ensemble methods
+3. **Automated Quality Control**: AI-powered annotation validation
+4. **Enhanced Reporting**: Custom report builder for research needs
+
+## Maintenance & Support
+
+### Monitoring
+- Application performance monitoring (APM)
+- Error tracking and alerting
+- User activity monitoring
+- System health dashboards
+
+### Backup & Recovery
+- Automated database backups
+- Image storage redundancy
+- Disaster recovery procedures
+- Data retention policies
+
+### Updates & Maintenance
+- Regular security updates
+- Model version management
+- Database migration procedures
+- User training and documentation updates
+
+## Development Status
+
+### Completed (Phase 1)
+- ✅ User authentication and authorization system
+- ✅ Role-based dashboard framework
+- ✅ Basic image upload functionality
+- ✅ YOLO processing integration setup
+- ✅ Database schema design
+
+### In Progress (Phase 2)
+- 🔄 Complete database model implementation
+- 🔄 Batch assignment system
+- 🔄 Annotation interface development
+- 🔄 Verification workflow implementation
+
+### Planned (Phase 3+)
+- 📋 Performance analytics dashboard
+- 📋 Advanced annotation tools
+- 📋 Dataset export functionality
+- 📋 Quality assurance automation

@@ -1,0 +1,66 @@
+{
+  "currsorrules": {
+    "core_principles": [
+      {
+        "description": "Analyze affected files, components, and logic before making changes.",
+        "type": "impact_analysis"
+      },
+      {
+        "description": "Trace full flow from UI/API to backend before applying updates.",
+        "type": "flow_mapping"
+      },
+      {
+        "description": "Simulate user/API behavior to ensure existing functionality is not broken.",
+        "type": "safe_simulation"
+      },
+      {
+        "description": "Only proceed if current functionality remains intact after simulation.",
+        "type": "simulation_validation"
+      }
+    ],
+    "change_guidelines": [
+      {
+        "description": "Limit changes to only the required parts. Avoid unrelated file edits.",
+        "type": "scoped_changes"
+      },
+      {
+        "description": "Preserve existing logic and API contracts unless explicitly required.",
+        "type": "logic_preservation"
+      },
+      {
+        "description": "Respect current folder structure and code organization in React and Django.",
+        "type": "architecture_integrity"
+      },
+      {
+        "description": "Follow existing code style. Do not reformat untouched code.",
+        "type": "style_consistency"
+      }
+    ],
+    "ai_rules": [
+      {
+        "description": "Perform analysis and simulation before suggesting or applying code.",
+        "type": "pre_change_validation"
+      },
+      {
+        "description": "Explain what changes are made, why, and what they impact.",
+        "type": "change_explanation"
+      }
+    ],
+    "testing": [
+      {
+        "description": "Write tests for new logic. Ensure all existing tests pass.",
+        "type": "test_coverage"
+      },
+      {
+        "description": "Validate functionality incrementally after each change.",
+        "type": "stepwise_validation"
+      }
+    ],
+    "code_style": {
+      "language": "TypeScript",
+      "prefer_functional_patterns": true,
+      "modifications": "Only edit what's needed. Keep code clean, modular, and functional.",
+      "comments": "Preserve existing comments and documentation."
+    }
+  }
+}

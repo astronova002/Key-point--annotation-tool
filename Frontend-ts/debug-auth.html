@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Auth</title>
+</head>
+<body>
+    <h1>Debug Authentication</h1>
+    <button onclick="testLogin()">Test Login</button>
+    <button onclick="testRefresh()">Test Refresh</button>
+    <button onclick="checkLocalStorage()">Check LocalStorage</button>
+    <button onclick="clearStorage()">Clear Storage</button>
+    <div id="output"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script>
+        const API_URL = 'http://localhost:8000/api/auth/';
+        const output = document.getElementById('output');
+
+        function log(message) {
+            output.innerHTML += '<div>' + JSON.stringify(message, null, 2) + '</div>';
+            console.log(message);
+        }
+
+        async function testLogin() {
+            try {
+                log('Starting login test...');
+                const response = await axios.post(API_URL + 'login/', {
+                    username: 'admin',
+                    password: 'admin'
+                }, {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                log('Login response:');
+                log(response.data);
+
+                // Store user data like the frontend does
+                const userDataToStore = {
+                    ...response.data.user,
+                    accessToken: response.data.access,
+                    refreshToken: response.data.refresh
+                };
+                
+                localStorage.setItem('user', JSON.stringify(userDataToStore));
+                log('Stored user data in localStorage');
+                
+            } catch (error) {
+                log('Login error:');
+                log(error.response?.data || error.message);
+            }
+        }
+
+        async function testRefresh() {
+            try {
+                const user = localStorage.getItem('user');
+                if (!user) {
+                    log('No user data in localStorage');
+                    return;
+                }
+
+                const userData = JSON.parse(user);
+                log('User data from localStorage:');
+                log(userData);
+
+                if (!userData.refreshToken) {
+                    log('No refresh token found!');
+                    return;
+                }
+
+                log('Making refresh request...');
+                const response = await axios.post(API_URL + 'token/refresh/', {
+                    refresh: userData.refreshToken
+                }, {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                log('Refresh response:');
+                log(response.data);
+
+            } catch (error) {
+                log('Refresh error:');
+                log(error.response?.data || error.message);
+            }
+        }
+
+        function checkLocalStorage() {
+            const user = localStorage.getItem('user');
+            log('Current localStorage user data:');
+            if (user) {
+                log(JSON.parse(user));
+            } else {
+                log('No user data found');
+            }
+        }
+
+        function clearStorage() {
+            localStorage.removeItem('user');
+            log('Cleared localStorage');
+        }
+    </script>
+</body>
+</html>
